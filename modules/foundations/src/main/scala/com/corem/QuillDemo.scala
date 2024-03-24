@@ -72,7 +72,7 @@ class JobRepositoryLive(quill: Quill.Postgres[SnakeCase]) extends JobRepository 
 }
 
 object JobRepositoryLive {
-  val layer = ZLayer {
+  val layer: ZLayer[Quill.Postgres[SnakeCase], Nothing, JobRepositoryLive] = ZLayer {
     ZIO.service[Quill.Postgres[SnakeCase]].map(quill => JobRepositoryLive(quill))
   }
 }
