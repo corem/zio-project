@@ -1,6 +1,6 @@
 package com.corem.reviewbord
 
-import com.corem.reviewbord.http.controllers.HealthController
+import com.corem.reviewbord.http.HttpApi
 import sttp.tapir.*
 import sttp.tapir.server.ziohttp.*
 import zio.*
@@ -9,11 +9,11 @@ import zio.http.Server
 object Application extends ZIOAppDefault {
 
   val serverProgram = for {
-    controller <- HealthController.makeZIO
+    endpoints <- HttpApi.endpointsZIO
     _ <- Server.serve(
       ZioHttpInterpreter(
         ZioHttpServerOptions.default
-      ).toHttp(controller.health)
+      ).toHttp(endpoints)
     )
     _ <- Console.printLine("Server Debug!")
   } yield ()
