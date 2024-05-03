@@ -4,6 +4,7 @@ import com.corem.reviewboard.syntax.assert
 import com.corem.reviewbord.domain.data.Company
 import com.corem.reviewbord.http.controllers.CompanyController
 import com.corem.reviewbord.http.requests.CreateCompanyRequest
+import com.corem.reviewbord.services.CompanyService
 import sttp.client3.*
 import sttp.client3.testing.SttpBackendStub
 import sttp.monad.MonadError
@@ -17,6 +18,29 @@ import zio.test.*
 object CompanyControllerSpec extends ZIOSpecDefault {
 
   private given zioME: MonadError[Task] = new RIOMonadError[Any]
+
+  private val corem = Company(1, "corem-corp", "Corem Corp", "core@corem.com")
+
+  private val serviceStub = new CompanyService {
+    override def create(createCompanyRequest: CreateCompanyRequest): Task[Company] =
+      ZIO.succeed(corem)
+
+    override def getAll: Task[List[Company]] =
+      ZIO.succeed(List(corem))
+
+    override def getById(id: Long): Task[Option[Company]] =
+      ZIO.succeed {
+        if (id == 1) Some(corem)
+        else None
+      }
+
+    override def getBySlug(slug: String): Task[Option[Company]] =
+      ZIO.succeed {
+        if (slug == corem.slug) Some(corem)
+        else None
+      }
+  }
+
   private def backendStubZIO(endpointFun: CompanyController => ServerEndpoint[Any, Task]) =
     for {
       controller <- CompanyController.makeZIO
@@ -41,7 +65,7 @@ object CompanyControllerSpec extends ZIOSpecDefault {
         program.assert { respBody =>
           respBody.toOption
             .flatMap(_.fromJson[Company].toOption)
-            .contains(Company(1, "my-company", "My Company", "corem.com"))
+            .contains(corem)
         }
       },
       test("Get all Companies") {
@@ -55,7 +79,7 @@ object CompanyControllerSpec extends ZIOSpecDefault {
         program.assert { respBody =>
           respBody.toOption
             .flatMap(_.fromJson[List[Company]].toOption)
-            .contains(List())
+            .contains(List(corem))
         }
       },
       test("Get by id") {
@@ -69,8 +93,9 @@ object CompanyControllerSpec extends ZIOSpecDefault {
         program.assert { respBody =>
           respBody.toOption
             .flatMap(_.fromJson[Company].toOption)
-            .isEmpty
+            .contains(corem)
         }
       }
     )
+      .provide(ZLayer.succeed(serviceStub))
 }
