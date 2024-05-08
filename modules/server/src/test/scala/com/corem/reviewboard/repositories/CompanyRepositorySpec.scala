@@ -1,6 +1,5 @@
 package com.corem.reviewboard.repositories
 
-import com.corem.reviewboard.repositories.CompanyRepositorySpec.test
 import com.corem.reviewbord.domain.data.Company
 import com.corem.reviewbord.repositories.{CompanyRepository, CompanyRepositoryLive, Repository}
 import zio.*
@@ -19,6 +18,8 @@ object CompanyRepositorySpec extends ZIOSpecDefault with RepositorySpec {
     name = genString(),
     url = genString()
   )
+
+  override val initScript: String = "sql/companies.sql"
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("CompanyRepositorySpec")(
       test("Create Company") {

@@ -7,9 +7,12 @@ import zio.{ZIO, ZLayer}
 import javax.sql.DataSource
 
 trait RepositorySpec {
+
+  val initScript: String
+
   private def createContainer() = {
     val container: PostgreSQLContainer[Nothing] =
-      PostgreSQLContainer("postgres").withInitScript("sql/companies.sql")
+      PostgreSQLContainer("postgres").withInitScript(initScript)
     container.start()
     container
   }

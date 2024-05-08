@@ -14,7 +14,7 @@ trait CompanyRepository {
   def delete(id: Long): Task[Company]
 }
 
-class CompanyRepositoryLive(quill: Quill.Postgres[SnakeCase]) extends CompanyRepository {
+class CompanyRepositoryLive private (quill: Quill.Postgres[SnakeCase]) extends CompanyRepository {
   import quill.*
   inline given schema: SchemaMeta[Company]  = schemaMeta[Company]("companies")
   inline given insMeta: InsertMeta[Company] = insertMeta[Company](_.id)
