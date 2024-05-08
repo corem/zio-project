@@ -1,6 +1,6 @@
 package com.corem.reviewboard.http.controllers
 
-import com.corem.reviewboard.syntax.assert
+import com.corem.reviewboard.syntax.*
 import com.corem.reviewbord.domain.data.Company
 import com.corem.reviewbord.http.controllers.CompanyController
 import com.corem.reviewbord.http.requests.CreateCompanyRequest

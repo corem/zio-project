@@ -1,7 +1,8 @@
 package com.corem.reviewbord
 
 import com.corem.reviewbord.http.HttpApi
-import com.corem.reviewbord.services.CompanyService
+import com.corem.reviewbord.repositories.{CompanyRepositoryLive, Repository}
+import com.corem.reviewbord.services.CompanyServiceLive
 import sttp.tapir.*
 import sttp.tapir.server.ziohttp.*
 import zio.*
@@ -16,12 +17,16 @@ object Application extends ZIOAppDefault {
         ZioHttpServerOptions.default
       ).toHttp(endpoints)
     )
-    _ <- Console.printLine("Server Debug!")
   } yield ()
 
   override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
     serverProgram.provide(
       Server.default,
-      CompanyService.dummyLayer
+      // Services
+      CompanyServiceLive.layer,
+      // Repositories
+      CompanyRepositoryLive.layer,
+      // Other requirements
+      Repository.dataLayer
     )
 }
