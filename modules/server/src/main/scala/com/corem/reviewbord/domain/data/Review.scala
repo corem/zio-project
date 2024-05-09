@@ -3,7 +3,7 @@ package com.corem.reviewbord.domain.data
 import java.time.Instant
 import zio.json.{DeriveJsonCodec, JsonCodec}
 
-case class Review(
+final case class Review(
     id: Long,
     companyId: Long,
     userId: Long,

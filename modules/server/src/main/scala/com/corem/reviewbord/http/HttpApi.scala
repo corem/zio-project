@@ -4,7 +4,8 @@ import com.corem.reviewbord.http.controllers.{
   BaseController,
   CompanyController,
   HealthController,
-  ReviewController
+  ReviewController,
+  UserController
 }
 
 object HttpApi {
@@ -15,7 +16,8 @@ object HttpApi {
     health    <- HealthController.makeZIO
     companies <- CompanyController.makeZIO
     reviews   <- ReviewController.makeZIO
-  } yield List(health, companies, reviews)
+    users     <- UserController.makeZIO
+  } yield List(health, companies, reviews, users)
 
   def gatherRoutes(controllers: List[BaseController]) =
     controllers.flatMap(_.routes)

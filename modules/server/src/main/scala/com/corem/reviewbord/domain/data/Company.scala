@@ -2,7 +2,7 @@ package com.corem.reviewbord.domain.data
 
 import zio.json.{DeriveJsonCodec, JsonCodec}
 
-case class Company(
+final case class Company(
     id: Long,
     slug: String,
     name: String,

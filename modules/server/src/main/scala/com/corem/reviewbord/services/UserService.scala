@@ -1,6 +1,6 @@
 package com.corem.reviewbord.services
 
-import com.corem.reviewbord.domain.data.User
+import com.corem.reviewbord.domain.data.*
 import com.corem.reviewbord.repositories.UserRepository
 import zio.*
 
@@ -11,9 +11,12 @@ import javax.crypto.spec.PBEKeySpec
 trait UserService {
   def registerUser(email: String, password: String): Task[User]
   def verifyPassword(email: String, password: String): Task[Boolean]
+  def updatePassword(email: String, oldPassword: String, newPassword: String): Task[User]
+  def deleteUser(email: String, password: String): Task[User]
+  def generateToken(email: String, password: String): Task[Option[UserToken]]
 }
 
-class UserServiceLive private (repo: UserRepository) extends UserService {
+class UserServiceLive private (jwtService: JWTService, repo: UserRepository) extends UserService {
   override def registerUser(email: String, password: String): Task[User] =
     repo.create(
       User(
@@ -26,19 +29,67 @@ class UserServiceLive private (repo: UserRepository) extends UserService {
     for {
       existingUser <- repo
         .getByEmail(email)
-        .someOrFail(new RuntimeException(s"Cannot verify user $email: inexistant"))
-      result <- ZIO.attempt(
-        UserServiceLive.Hasher.validateHash(password, existingUser.hashedPassword)
-      )
+      result <- existingUser match {
+        case Some(user) =>
+          ZIO
+            .attempt(
+              UserServiceLive.Hasher.validateHash(password, user.hashedPassword)
+            )
+            .orElseSucceed(false)
+        case None => ZIO.succeed(false)
+      }
+
     } yield result
 
+  override def generateToken(email: String, password: String): Task[Option[UserToken]] =
+    for {
+      existingUser <- repo
+        .getByEmail(email)
+        .someOrFail(new RuntimeException(s"Cannot verify user $email: inexistant"))
+      verified <- ZIO.attempt(
+        UserServiceLive.Hasher.validateHash(password, existingUser.hashedPassword)
+      )
+      maybeToken <- jwtService.createToken(existingUser).when(verified)
+    } yield maybeToken
+
+  override def updatePassword(email: String, oldPassword: String, newPassword: String): Task[User] =
+    for {
+      existingUser <- repo
+        .getByEmail(email)
+        .someOrFail(new RuntimeException(s"Cannot verify user $email: inexistant"))
+      verified <- ZIO.attempt(
+        UserServiceLive.Hasher.validateHash(oldPassword, existingUser.hashedPassword)
+      )
+      updatedUser <- repo
+        .update(
+          existingUser.id,
+          user => user.copy(hashedPassword = UserServiceLive.Hasher.generateHash(newPassword))
+        )
+        .when(verified)
+        .someOrFail(new RuntimeException(s"Cannot update password for $email"))
+    } yield updatedUser
+
+  override def deleteUser(email: String, password: String): Task[User] =
+    for {
+      existingUser <- repo
+        .getByEmail(email)
+        .someOrFail(new RuntimeException(s"Cannot verify user $email: inexistant"))
+      verified <- ZIO.attempt(
+        UserServiceLive.Hasher.validateHash(password, existingUser.hashedPassword)
+      )
+      updatedUser <- repo
+        .delete(existingUser.id)
+        .when(verified)
+        .someOrFail(new RuntimeException(s"Cannot delete user $email"))
+    } yield updatedUser
 }
 
 object UserServiceLive {
   val layer = ZLayer {
     for {
-      repo <- ZIO.service[UserRepository]
-    } yield new UserServiceLive(repo)
+      jwtService <- ZIO.service[JWTService]
+      repo       <- ZIO.service[UserRepository]
+    } yield new UserServiceLive(jwtService, repo)
   }
 
   object Hasher {
