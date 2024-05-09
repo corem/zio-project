@@ -5,8 +5,6 @@ import com.corem.reviewbord.http.requests.CreateCompanyRequest
 import com.corem.reviewbord.repositories.CompanyRepository
 import zio.*
 
-import scala.collection.mutable
-
 trait CompanyService {
   def create(createCompanyRequest: CreateCompanyRequest): Task[Company]
   def getAll: Task[List[Company]]
