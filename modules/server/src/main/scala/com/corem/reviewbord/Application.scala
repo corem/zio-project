@@ -1,8 +1,8 @@
 package com.corem.reviewbord
 
 import com.corem.reviewbord.http.HttpApi
-import com.corem.reviewbord.repositories.{CompanyRepositoryLive, Repository}
-import com.corem.reviewbord.services.CompanyServiceLive
+import com.corem.reviewbord.repositories.{CompanyRepositoryLive, Repository, ReviewRepositoryLive}
+import com.corem.reviewbord.services.{CompanyServiceLive, ReviewServiceLive}
 import sttp.tapir.*
 import sttp.tapir.server.ziohttp.*
 import zio.*
@@ -24,8 +24,10 @@ object Application extends ZIOAppDefault {
       Server.default,
       // Services
       CompanyServiceLive.layer,
+      ReviewServiceLive.layer,
       // Repositories
       CompanyRepositoryLive.layer,
+      ReviewRepositoryLive.layer,
       // Other requirements
       Repository.dataLayer
     )

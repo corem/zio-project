@@ -96,6 +96,5 @@ object CompanyControllerSpec extends ZIOSpecDefault {
             .contains(corem)
         }
       }
-    )
-      .provide(ZLayer.succeed(serviceStub))
+    ).provide(ZLayer.succeed(serviceStub))
 }
