@@ -46,4 +46,22 @@ trait UserEndpoints extends BaseEndpoint {
       .post
       .in(jsonBody[LoginRequest])
       .out(jsonBody[UserToken])
+
+  val forgetPasswordEndpoint =
+    baseEndpoint
+      .tag("users")
+      .name("forgotPassword")
+      .description("Trigger email for password recovery")
+      .in("users" / "forgot")
+      .post
+      .in(jsonBody[ForgotPasswordRequest])
+
+  val recoverPasswordEndpoint =
+    baseEndpoint
+      .tag("users")
+      .name("recoverPassword")
+      .description("Set new password based on OTP")
+      .in("users" / "recover")
+      .post
+      .in(jsonBody[RecoverPasswordRequest])
 }

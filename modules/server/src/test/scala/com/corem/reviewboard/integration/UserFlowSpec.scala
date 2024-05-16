@@ -96,7 +96,7 @@ object UserFlowSpec extends ZIOSpecDefault with RepositorySpec {
           maybeToken <- backendStub
             .post[UserResponse]("/users/login", LoginRequest("core@corem.com", "password"))
         } yield assertTrue(
-          maybeToken.filter(_.email == "core@corem.com").nonEmpty
+          maybeToken.exists(_.email == "core@corem.com")
         )
       },
       test("Update password") {
@@ -139,7 +139,7 @@ object UserFlowSpec extends ZIOSpecDefault with RepositorySpec {
             )
           maybeUser <- userRepo.getByEmail("core@corem.com")
         } yield assertTrue(
-          maybeOldUser.filter(_.email == "core@corem.com").nonEmpty && maybeUser.isEmpty
+          maybeOldUser.exists(_.email == "core@corem.com") && maybeUser.isEmpty
         )
       }
     ).provide(

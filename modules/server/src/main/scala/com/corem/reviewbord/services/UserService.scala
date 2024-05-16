@@ -1,7 +1,7 @@
 package com.corem.reviewbord.services
 
 import com.corem.reviewbord.domain.data.*
-import com.corem.reviewbord.repositories.UserRepository
+import com.corem.reviewbord.repositories.{RecoveryTokenRepository, UserRepository}
 import zio.*
 
 import java.security.SecureRandom
@@ -14,9 +14,16 @@ trait UserService {
   def updatePassword(email: String, oldPassword: String, newPassword: String): Task[User]
   def deleteUser(email: String, password: String): Task[User]
   def generateToken(email: String, password: String): Task[Option[UserToken]]
+  def sendPasswordRecoveryToken(email: String): Task[Unit]
+  def recoverPasswordFromToken(email: String, token: String, newPassword: String): Task[Boolean]
 }
 
-class UserServiceLive private (jwtService: JWTService, repo: UserRepository) extends UserService {
+class UserServiceLive private (
+    jwtService: JWTService,
+    emailService: EmailService,
+    repo: UserRepository,
+    tokenRepo: RecoveryTokenRepository
+) extends UserService {
   override def registerUser(email: String, password: String): Task[User] =
     repo.create(
       User(
@@ -38,7 +45,6 @@ class UserServiceLive private (jwtService: JWTService, repo: UserRepository) ext
             .orElseSucceed(false)
         case None => ZIO.succeed(false)
       }
-
     } yield result
 
   override def generateToken(email: String, password: String): Task[Option[UserToken]] =
@@ -82,14 +88,40 @@ class UserServiceLive private (jwtService: JWTService, repo: UserRepository) ext
         .when(verified)
         .someOrFail(new RuntimeException(s"Cannot delete user $email"))
     } yield updatedUser
+
+  override def sendPasswordRecoveryToken(email: String): Task[Unit] =
+    tokenRepo.getToken(email).flatMap {
+      case Some(token) =>
+        emailService.sendPasswordRecoveryEmail(email, token)
+      case None => ZIO.unit
+    }
+
+  override def recoverPasswordFromToken(
+      email: String,
+      token: String,
+      newPassword: String
+  ): Task[Boolean] =
+    for {
+      existingUser <- repo.getByEmail(email).someOrFail(new RuntimeException("Non-existent user"))
+      tokenIsValid <- tokenRepo.checkToken(email, token)
+      result <- repo
+        .update(
+          existingUser.id,
+          user => user.copy(hashedPassword = UserServiceLive.Hasher.generateHash(newPassword))
+        )
+        .when(tokenIsValid)
+        .map(_.nonEmpty)
+    } yield result
 }
 
 object UserServiceLive {
   val layer = ZLayer {
     for {
-      jwtService <- ZIO.service[JWTService]
-      repo       <- ZIO.service[UserRepository]
-    } yield new UserServiceLive(jwtService, repo)
+      jwtService   <- ZIO.service[JWTService]
+      emailService <- ZIO.service[EmailService]
+      repo         <- ZIO.service[UserRepository]
+      tokenRepo    <- ZIO.service[RecoveryTokenRepository]
+    } yield new UserServiceLive(jwtService, emailService, repo, tokenRepo)
   }
 
   object Hasher {
