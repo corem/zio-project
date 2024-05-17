@@ -1,13 +1,13 @@
 package com.corem.reviewboard.services
 
 import com.corem.reviewbord.domain.data.{User, UserId, UserToken}
-import com.corem.reviewbord.repositories.UserRepository
-import com.corem.reviewbord.services.{JWTService, UserService, UserServiceLive}
+import com.corem.reviewbord.repositories.{RecoveryTokenRepository, UserRepository}
+import com.corem.reviewbord.services.{EmailService, JWTService, UserService, UserServiceLive}
 import zio.*
 import zio.test.*
 object UserServiceSpec extends ZIOSpecDefault {
 
-  val testUser = User(
+  private val testUser = User(
     1L,
     "corem@core.com",
     "1000:1CCC79A4A9743CAF0B57E29E328FF14D3B5178204FBB2CC4:4701C25232433B49DC1E2AB55A9530CE383948B5D9DEDDCD"
@@ -38,6 +38,27 @@ object UserServiceSpec extends ZIOSpecDefault {
         db -= id
         user
       }
+    }
+  }
+
+  val stubTokenRepoLayer = ZLayer.succeed {
+    new RecoveryTokenRepository {
+      val db = collection.mutable.Map[String, String]()
+
+      override def getToken(email: String): Task[Option[String]] = ZIO.attempt {
+        val token = util.Random.alphanumeric.take(8).mkString.toUpperCase
+        db += (email -> token)
+        Some(token)
+      }
+
+      override def checkToken(email: String, token: String): Task[Boolean] =
+        ZIO.succeed(db.get(email).filter(_ == token).nonEmpty)
+    }
+  }
+
+  val stubEmailsLayer = ZLayer.succeed {
+    new EmailService {
+      override def sendEmail(to: String, subject: String, content: String): Task[Unit] = ZIO.unit
     }
   }
 
@@ -103,5 +124,11 @@ object UserServiceSpec extends ZIOSpecDefault {
           deletedUser <- service.deleteUser(testUser.email, "corem.com")
         } yield assertTrue(deletedUser.email == testUser.email)
       }
-    ).provide(UserServiceLive.layer, stubJwtLayer, stubRepoLayer)
+    ).provide(
+      UserServiceLive.layer,
+      stubJwtLayer,
+      stubRepoLayer,
+      stubEmailsLayer,
+      stubTokenRepoLayer
+    )
 }

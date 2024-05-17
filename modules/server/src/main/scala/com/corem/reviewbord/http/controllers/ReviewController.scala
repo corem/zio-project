@@ -1,19 +1,23 @@
 package com.corem.reviewbord.http.controllers
 
-import com.corem.reviewbord.domain.data.Review
+import com.corem.reviewbord.domain.data.{Review, UserId}
 import com.corem.reviewbord.http.endpoints.ReviewEndpoints
-import com.corem.reviewbord.services.ReviewService
+import com.corem.reviewbord.services.{JWTService, ReviewService}
 import sttp.tapir.server.ServerEndpoint
 import zio.*
 
-class ReviewController private (service: ReviewService)
+class ReviewController private (service: ReviewService, jwtService: JWTService)
     extends BaseController
     with ReviewEndpoints {
 
   val create: ServerEndpoint[Any, Task] =
-    createEndpoint.serverLogic { createReviewRequest =>
-      service.create(createReviewRequest, -1L).either // TODO: Add UserId
-    }
+    createEndpoint
+      .serverSecurityLogic[UserId, Task] { token =>
+        jwtService.verifyToken(token).either
+      }
+      .serverLogic { userId => createReviewRequest =>
+        service.create(createReviewRequest, userId.id).either
+      }
 
   val getById: ServerEndpoint[Any, Task] =
     getByIdEndpoint.serverLogic { id =>
@@ -30,6 +34,7 @@ class ReviewController private (service: ReviewService)
 
 object ReviewController {
   val makeZIO = for {
-    service <- ZIO.service[ReviewService]
-  } yield new ReviewController(service)
+    service    <- ZIO.service[ReviewService]
+    jwtService <- ZIO.service[JWTService]
+  } yield new ReviewController(service, jwtService)
 }

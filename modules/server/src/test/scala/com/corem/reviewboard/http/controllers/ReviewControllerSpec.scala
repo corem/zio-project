@@ -1,10 +1,10 @@
 package com.corem.reviewboard.http.controllers
 
 import com.corem.reviewboard.syntax.*
-import com.corem.reviewbord.domain.data.Review
+import com.corem.reviewbord.domain.data.{Review, User, UserId, UserToken}
 import com.corem.reviewbord.http.controllers.ReviewController
 import com.corem.reviewbord.http.requests.CreateReviewRequest
-import com.corem.reviewbord.services.ReviewService
+import com.corem.reviewbord.services.{JWTService, ReviewService}
 import sttp.client3.*
 import sttp.client3.testing.SttpBackendStub
 import sttp.monad.MonadError
@@ -19,6 +19,12 @@ import java.time.Instant
 
 object ReviewControllerSpec extends ZIOSpecDefault {
   private given zioME: MonadError[Task] = new RIOMonadError[Any]
+
+  private val testUser = User(
+    1L,
+    "corem@core.com",
+    "1000:1CCC79A4A9743CAF0B57E29E328FF14D3B5178204FBB2CC4:4701C25232433B49DC1E2AB55A9530CE383948B5D9DEDDCD"
+  )
 
   private val goodReview = Review(
     id = 1L,
@@ -57,6 +63,14 @@ object ReviewControllerSpec extends ZIOSpecDefault {
       }
   }
 
+  private val jwtServiceStub = new JWTService {
+    override def createToken(user: User): Task[UserToken] =
+      ZIO.succeed(UserToken(user.email, "Access", Long.MaxValue))
+
+    override def verifyToken(token: String): Task[UserId] =
+      ZIO.succeed(UserId(testUser.id, testUser.email))
+  }
+
   private def backendStubZIO(endpointFun: ReviewController => ServerEndpoint[Any, Task]) =
     for {
       controller <- ReviewController.makeZIO
@@ -85,6 +99,7 @@ object ReviewControllerSpec extends ZIOSpecDefault {
                 review = "Awesome possum"
               ).toJson
             )
+            .header("Authorization", "Bearer ALL_IS_GOOD")
             .send(backendStub)
         } yield response.body
 
@@ -130,5 +145,5 @@ object ReviewControllerSpec extends ZIOSpecDefault {
             .contains(List())
         }
       }
-    ).provide(ZLayer.succeed(serviceStub))
+    ).provide(ZLayer.succeed(serviceStub), ZLayer.succeed(jwtServiceStub))
 }

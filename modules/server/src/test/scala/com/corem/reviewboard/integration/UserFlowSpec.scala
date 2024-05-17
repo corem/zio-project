@@ -1,18 +1,25 @@
 package com.corem.reviewboard.integration
 
 import com.corem.reviewboard.repositories.RepositorySpec
-import com.corem.reviewbord.config.JWTConfig
+import com.corem.reviewbord.config.{JWTConfig, RecoveryTokenConfig}
 import com.corem.reviewbord.domain.data.UserToken
 import com.corem.reviewbord.http.controllers.UserController
 import com.corem.reviewbord.http.requests.{
   DeleteAccountRequest,
+  ForgotPasswordRequest,
   LoginRequest,
+  RecoverPasswordRequest,
   RegisterUserAccount,
   UpdatePasswordRequest
 }
 import com.corem.reviewbord.http.responses.UserResponse
-import com.corem.reviewbord.repositories.{Repository, UserRepository, UserRepositoryLive}
-import com.corem.reviewbord.services.{JWTServiceLive, UserServiceLive}
+import com.corem.reviewbord.repositories.{
+  RecoveryTokenRepositoryLive,
+  Repository,
+  UserRepository,
+  UserRepositoryLive
+}
+import com.corem.reviewbord.services.{EmailService, JWTServiceLive, UserServiceLive}
 import sttp.client3.{basicRequest, SttpBackend, UriContext}
 import sttp.client3.testing.SttpBackendStub
 import sttp.model.Method
@@ -62,6 +69,9 @@ object UserFlowSpec extends ZIOSpecDefault with RepositorySpec {
     def postAuth[B: JsonCodec](path: String, payload: A, token: String): Task[Option[B]] =
       sendRequest(Method.POST, path, payload, Some(token))
 
+    def postNoResponse(path: String, payload: A): Task[Unit] =
+      basicRequest.method(Method.POST, uri"$path").body(payload.toJson).send(backend).unit
+
     def put[B: JsonCodec](path: String, payload: A): Task[Option[B]] =
       sendRequest(Method.PUT, path, payload, None)
 
@@ -74,6 +84,20 @@ object UserFlowSpec extends ZIOSpecDefault with RepositorySpec {
     def deleteAuth[B: JsonCodec](path: String, payload: A, token: String): Task[Option[B]] =
       sendRequest(Method.DELETE, path, payload, Some(token))
   }
+
+  class EmailServiceProbe extends EmailService {
+    val db = collection.mutable.Map[String, String]()
+
+    override def sendEmail(to: String, subject: String, content: String): Task[Unit] = ZIO.unit
+
+    override def sendPasswordRecoveryEmail(to: String, token: String): Task[Unit] =
+      ZIO.succeed(db += (to -> token))
+
+    def probeToken(email: String): Task[Option[String]] = ZIO.succeed(db.get(email))
+  }
+
+  val emailServiceLayer: ZLayer[Any, Nothing, EmailServiceProbe] =
+    ZLayer.succeed(new EmailServiceProbe)
 
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("UserFlowSpec")(
@@ -141,14 +165,39 @@ object UserFlowSpec extends ZIOSpecDefault with RepositorySpec {
         } yield assertTrue(
           maybeOldUser.exists(_.email == "core@corem.com") && maybeUser.isEmpty
         )
+      },
+      test("Recover password flow") {
+        for {
+          backendStub <- backendStubZIO
+          _ <- backendStub
+            .post[UserResponse]("/users", RegisterUserAccount("core@corem.com", "password"))
+          _ <- backendStub.postNoResponse("/users/forgot", ForgotPasswordRequest("core@corem.com"))
+          emailServiceProbe <- ZIO.service[EmailServiceProbe]
+          token <- emailServiceProbe
+            .probeToken("core@corem.com")
+            .someOrFail(new RuntimeException("Token was not emailed"))
+          _ <- backendStub.postNoResponse(
+            "/users/recover",
+            RecoverPasswordRequest("core@corem.com", token, "newpassword")
+          )
+          maybeOldToken <- backendStub
+            .post[UserToken]("/users/login", LoginRequest("core@corem.com", "password"))
+          maybeNewToken <- backendStub
+            .post[UserToken]("/users/login", LoginRequest("core@corem.com", "newpassword"))
+        } yield assertTrue(
+          maybeOldToken.isEmpty && maybeNewToken.nonEmpty
+        )
       }
     ).provide(
       UserServiceLive.layer,
       JWTServiceLive.layer,
       UserRepositoryLive.layer,
+      RecoveryTokenRepositoryLive.layer,
+      emailServiceLayer,
       Repository.quillLayer,
       dataSourceLayer,
       ZLayer.succeed(JWTConfig("secret", 3600)),
+      ZLayer.succeed(RecoveryTokenConfig(24 * 3600)),
       Scope.default
     )
 }

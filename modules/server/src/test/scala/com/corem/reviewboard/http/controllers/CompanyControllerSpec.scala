@@ -1,10 +1,10 @@
 package com.corem.reviewboard.http.controllers
 
 import com.corem.reviewboard.syntax.*
-import com.corem.reviewbord.domain.data.Company
+import com.corem.reviewbord.domain.data.{Company, User, UserId, UserToken}
 import com.corem.reviewbord.http.controllers.CompanyController
 import com.corem.reviewbord.http.requests.CreateCompanyRequest
-import com.corem.reviewbord.services.CompanyService
+import com.corem.reviewbord.services.{CompanyService, JWTService}
 import sttp.client3.*
 import sttp.client3.testing.SttpBackendStub
 import sttp.monad.MonadError
@@ -18,6 +18,12 @@ import zio.test.*
 object CompanyControllerSpec extends ZIOSpecDefault {
 
   private given zioME: MonadError[Task] = new RIOMonadError[Any]
+
+  private val testUser = User(
+    1L,
+    "corem@core.com",
+    "1000:1CCC79A4A9743CAF0B57E29E328FF14D3B5178204FBB2CC4:4701C25232433B49DC1E2AB55A9530CE383948B5D9DEDDCD"
+  )
 
   private val corem = Company(1, "corem-corp", "Corem Corp", "core@corem.com")
 
@@ -41,6 +47,14 @@ object CompanyControllerSpec extends ZIOSpecDefault {
       }
   }
 
+  private val jwtServiceStub = new JWTService {
+    override def createToken(user: User): Task[UserToken] =
+      ZIO.succeed(UserToken(user.email, "Access", Long.MaxValue))
+
+    override def verifyToken(token: String): Task[UserId] =
+      ZIO.succeed(UserId(testUser.id, testUser.email))
+  }
+
   private def backendStubZIO(endpointFun: CompanyController => ServerEndpoint[Any, Task]) =
     for {
       controller <- CompanyController.makeZIO
@@ -59,6 +73,7 @@ object CompanyControllerSpec extends ZIOSpecDefault {
           response <- basicRequest
             .post(uri"/companies")
             .body(CreateCompanyRequest("My Company", "corem.com").toJson)
+            .header("Authorization", "Bearer ALL_IS_GOOD")
             .send(backendStub)
         } yield response.body
 
@@ -96,5 +111,5 @@ object CompanyControllerSpec extends ZIOSpecDefault {
             .contains(corem)
         }
       }
-    ).provide(ZLayer.succeed(serviceStub))
+    ).provide(ZLayer.succeed(serviceStub), ZLayer.succeed(jwtServiceStub))
 }
