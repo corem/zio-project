@@ -18,17 +18,22 @@ import com.corem.reviewbord.services.{
 }
 import sttp.tapir.*
 import sttp.tapir.server.ziohttp.*
+import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import zio.*
 import zio.http.Server
 
 object Application extends ZIOAppDefault {
 
   val serverProgram = for {
+    _         <- Console.printLine("Starting server...")
     endpoints <- HttpApi.endpointsZIO
+    docEndpoints = SwaggerInterpreter().fromServerEndpoints(endpoints, "Reviewboard", "1.0.0")
     _ <- Server.serve(
       ZioHttpInterpreter(
         ZioHttpServerOptions.default
-      ).toHttp(endpoints)
+      ).toHttp(
+        endpoints ::: docEndpoints
+      )
     )
   } yield ()
 
